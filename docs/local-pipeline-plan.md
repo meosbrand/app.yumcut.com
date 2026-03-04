@@ -238,8 +238,12 @@ export interface ScriptProvider {
 
 #### OpenAI
 
+> **Note:** The following is _illustrative pseudocode_ showing the intended API
+> pattern. The real implementation must include response validation, error handling,
+> retries, and complete method bodies.
+
 ```typescript
-// scripts/daemon/providers/script/openai.ts
+// scripts/daemon/providers/script/openai.ts  (pseudocode)
 
 import type { ProviderConfig } from '../types';
 import type { ScriptProvider, ScriptGenerationInput, ScriptRefinementInput, ScriptGenerationOutput } from './types';
@@ -252,30 +256,22 @@ export function createOpenAIScriptProvider(config: ProviderConfig): ScriptProvid
   return {
     async generate(input: ScriptGenerationInput): Promise<ScriptGenerationOutput> {
       const systemPrompt = buildSystemPrompt(input);
-      const response = await fetch(`${baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: input.prompt },
-          ],
-          max_tokens: 4096,
-        }),
-      });
+      const response = await fetch(`${baseUrl}/chat/completions`, { /* ... */ });
+      if (!response.ok) throw new Error(`OpenAI API error ${response.status}`);
       const json = await response.json();
+      const choice = json.choices?.[0];
+      if (!choice?.message?.content) throw new Error('OpenAI returned no content');
       return {
-        text: json.choices[0].message.content,
+        text: choice.message.content,
         model,
         tokensUsed: json.usage?.total_tokens,
       };
     },
     async refine(input: ScriptRefinementInput): Promise<ScriptGenerationOutput> {
-      // Similar pattern with existing script in context
+      // Same pattern as generate(), but includes the existing script
+      // in a "user" message and the refinement instructions as a follow-up.
+      // Full implementation follows the same fetch → validate → return flow.
+      throw new Error('Not yet implemented — see generate() for the pattern');
     },
   };
 }
@@ -450,8 +446,11 @@ Current code calls `generateImages()` from `scripts/daemon/helpers/images.ts`.
 
 ### 6.4 Stable Diffusion Local Example
 
+> **Note:** Pseudocode illustrating the provider pattern. Real implementation requires
+> error handling, base64-to-file conversion, and proper path management.
+
 ```typescript
-// scripts/daemon/providers/image/stable-diffusion.ts
+// scripts/daemon/providers/image/stable-diffusion.ts  (pseudocode)
 
 export function createStableDiffusionProvider(config: ProviderConfig): ImageProvider {
   const baseUrl = config.apiBaseUrl ?? 'http://127.0.0.1:7860';
@@ -472,8 +471,13 @@ export function createStableDiffusionProvider(config: ProviderConfig): ImageProv
           batch_size: input.count ?? 1,
         }),
       });
+      if (!response.ok) throw new Error(`SD API error ${response.status}`);
       const json = await response.json();
-      // Write base64 images to disk, return paths
+      // Real implementation:
+      // 1. Validate json.images is a non-empty array of base64 strings
+      // 2. For each base64 image: decode, write to disk in a temp dir
+      // 3. Return { images: [{ path, index }], model }
+      // 4. Handle I/O errors with cleanup of partial writes
     },
   };
 }
