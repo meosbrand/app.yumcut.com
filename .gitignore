@@ -21,6 +21,9 @@
 # production
 /build
 
+# stick-figure renderer output (local render artifacts)
+/scripts/stick-renderer/out/
+
 # misc
 .DS_Store
 *.pem

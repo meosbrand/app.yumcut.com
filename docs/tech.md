@@ -161,6 +161,12 @@ Once configured, each user can open **Account → Telegram notifications** to ge
 See [docs/mcp.md](mcp.md) for personal access tokens, per-user BYOK provider credentials, and the
 `scripts/mcp` MCP server that exposes project creation/status as agent tools.
 
+## Procedural stick-figure renderer
+
+See [docs/stick-renderer.md](stick-renderer.md) for the code-driven (no GPU, no diffusion model)
+stick-figure video renderer: a structured scene-script schema, a pure forward-kinematics rig, and
+a Remotion composition that renders it to mp4.
+
 ## Planning Documents
 
 See `plan/INDEX.md` for the full, cross-linked project plan and checklists.
