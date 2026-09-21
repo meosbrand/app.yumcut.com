@@ -47,6 +47,8 @@ model User {
   publishTasks              PublishTask[]
   subscriptionPurchases     SubscriptionPurchase[]
   guestProfile              GuestProfile?
+  apiTokens                 ApiToken[]
+  providerCredentials       ProviderCredential[]
 }
 
 model UserSettings {
@@ -764,4 +766,43 @@ model ProjectGroupCharacterSelection {
   userCharacterVariationId String? @db.Char(36)
 
   group ProjectGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+}
+
+/// Personal access token used by external/agent clients (e.g. an MCP server)
+/// to call the REST API on a user's behalf, alongside browser sessions and
+/// mobile JWTs. Only a salted hash of the token is stored; the plaintext is
+/// shown once at creation time.
+model ApiToken {
+  id         String    @id @default(uuid()) @db.Char(36)
+  userId     String    @db.Char(36)
+  name       String    @db.VarChar(191)
+  tokenHash  String    @unique @db.Char(64)
+  tokenLast4 String    @db.VarChar(4)
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+}
+
+/// Bring-your-own-key credential for an external provider (LLM, TTS, image
+/// generation, etc). The secret value is stored encrypted (AES-256-GCM);
+/// only a masked preview is ever returned to clients.
+model ProviderCredential {
+  id               String    @id @default(uuid()) @db.Char(36)
+  userId           String    @db.Char(36)
+  provider         String    @db.VarChar(64)
+  label            String    @db.VarChar(191)
+  encryptedValue   String    @db.LongText
+  maskedPreview    String    @db.VarChar(32)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  lastUsedAt       DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider])
+  @@index([userId])
 }

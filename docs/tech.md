@@ -156,6 +156,11 @@ The app can send Telegram alerts when a project needs manual approval, encounter
 
 Once configured, each user can open **Account → Telegram notifications** to generate a one-time connection code and link their Telegram chat. They can disconnect from the same panel or by sending `/stop` to the bot. The backend stores only the chat identifier and basic profile metadata; connection codes expire after 10 minutes.
 
+## Driving YumCut from an AI agent (MCP + BYOK)
+
+See [docs/mcp.md](mcp.md) for personal access tokens, per-user BYOK provider credentials, and the
+`scripts/mcp` MCP server that exposes project creation/status as agent tools.
+
 ## Planning Documents
 
 See `plan/INDEX.md` for the full, cross-linked project plan and checklists.

@@ -35,6 +35,7 @@ const EnvSchema = z.object({
   YOUTUBE_CLIENT_ID: z.string().min(1).optional(),
   YOUTUBE_CLIENT_SECRET: z.string().min(1).optional(),
   PUBLISH_CHANNEL_TOKEN_SECRET: z.string().min(32, 'PUBLISH_CHANNEL_TOKEN_SECRET must be at least 32 characters').optional(),
+  PROVIDER_CREDENTIAL_SECRET: z.string().min(32, 'PROVIDER_CREDENTIAL_SECRET must be at least 32 characters').optional(),
   REVIEW_LOGIN_EMAIL: z.string().min(1).optional(),
   REVIEW_LOGIN_PASSWORD: z.string().min(1).optional(),
   APPLE_SUBSCRIPTION_LOGS_ENABLED: z.preprocess(
