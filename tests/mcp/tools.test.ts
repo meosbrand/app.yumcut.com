@@ -79,10 +79,10 @@ describe('validate_stick_scene_script', () => {
   });
 });
 
-describe('render_stick_figure_video', () => {
+describe('start_stick_render_job', () => {
   it('rejects a script over the render duration cap without attempting a render', async () => {
     const result = await client.callTool({
-      name: 'render_stick_figure_video',
+      name: 'start_stick_render_job',
       arguments: {
         script: {
           characterDefs: [{ id: 'narrator' }],

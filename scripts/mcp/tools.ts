@@ -1,13 +1,11 @@
 import { z } from 'zod';
-import path from 'path';
-import { randomUUID } from 'crypto';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { yumcutFetch, YumCutApiError } from './client';
 import { sceneScriptSchema, totalDurationSeconds } from '@/shared/stick-scenes/schema';
-import { renderStickFigureScript } from '../stick-renderer/render-lib';
+import { getRenderJobQueue, readJob, listJobs } from './render-jobs';
 
 const MAX_RENDER_DURATION_SECONDS = 600;
-const RENDER_OUTPUT_DIR = path.resolve('scripts/stick-renderer/out/mcp');
+const DEFAULT_WAIT_TIMEOUT_MS = 20_000;
 
 function textResult(value: unknown) {
   return { content: [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }] };
@@ -175,14 +173,15 @@ export function registerYumCutTools(server: McpServer) {
   );
 
   server.registerTool(
-    'render_stick_figure_video',
+    'start_stick_render_job',
     {
-      title: 'Render a stick-figure scene script to mp4',
+      title: 'Start (or wait for) a stick-figure render job',
       description:
-        'Renders a validated stick-figure scene script to an mp4 using the procedural (no GPU, no diffusion model) ' +
-        'renderer in remotion/. This runs a real headless-browser render on the machine hosting this MCP server and ' +
-        `can take tens of seconds; scripts longer than ${MAX_RENDER_DURATION_SECONDS}s total are rejected -- split ` +
-        'a long video into several renders instead. Returns the absolute output path plus frame/fps/resolution info.',
+        'Renders a validated stick-figure scene script to mp4 using the procedural (no GPU, no diffusion model) ' +
+        'renderer in remotion/. A real headless-browser render takes tens of seconds, so by default this enqueues ' +
+        'the job and returns immediately with a jobId -- poll it with get_render_job. Pass wait: true to block ' +
+        `and return the finished result directly, for short clips. Scripts longer than ${MAX_RENDER_DURATION_SECONDS}s ` +
+        'total are rejected up front -- split a long video into several jobs instead.',
       inputSchema: {
         script: sceneScriptSchema,
         outputFileName: z
@@ -190,20 +189,46 @@ export function registerYumCutTools(server: McpServer) {
           .max(128)
           .optional()
           .describe('Optional .mp4 filename (basename only, no path separators); a unique name is generated if omitted'),
+        wait: z.boolean().optional().describe('Block until the render finishes (or times out) instead of returning immediately'),
+        waitTimeoutMs: z.number().int().min(1000).max(120_000).optional(),
       },
-      annotations: { title: 'Render stick-figure video', destructiveHint: false },
+      annotations: { title: 'Start stick-figure render job', destructiveHint: false },
     },
-    async ({ script, outputFileName }) => runTool(async () => {
+    async ({ script, outputFileName, wait, waitTimeoutMs }) => runTool(async () => {
       const duration = totalDurationSeconds(script);
       if (duration > MAX_RENDER_DURATION_SECONDS) {
         throw new Error(
           `Script totals ${duration}s, over the ${MAX_RENDER_DURATION_SECONDS}s render limit. Split it into shorter scripts.`,
         );
       }
-      const safeName = (outputFileName ? path.basename(outputFileName) : `${randomUUID()}.mp4`).replace(/[^a-zA-Z0-9._-]/g, '_');
-      const outPath = path.join(RENDER_OUTPUT_DIR, safeName.endsWith('.mp4') ? safeName : `${safeName}.mp4`);
-      const result = await renderStickFigureScript({ script, outPath });
-      return result;
+      const queue = getRenderJobQueue();
+      const job = queue.enqueue(script, outputFileName);
+      if (!wait) return job;
+      return queue.waitForJob(job.id, waitTimeoutMs ?? DEFAULT_WAIT_TIMEOUT_MS);
     }),
+  );
+
+  server.registerTool(
+    'get_render_job',
+    {
+      title: 'Get a stick-figure render job',
+      description: 'Poll a render job started by start_stick_render_job by id: status is queued, running, done, or error.',
+      inputSchema: { jobId: z.string().uuid() },
+    },
+    async ({ jobId }) => runTool(async () => {
+      const job = readJob(jobId);
+      if (!job) throw new Error(`No render job found with id ${jobId}`);
+      return job;
+    }),
+  );
+
+  server.registerTool(
+    'list_render_jobs',
+    {
+      title: 'List recent stick-figure render jobs',
+      description: 'List recent render jobs (newest first), on this MCP server instance, regardless of who started them.',
+      inputSchema: { limit: z.number().int().min(1).max(100).optional() },
+    },
+    async ({ limit }) => runTool(() => Promise.resolve(listJobs(limit ?? 20))),
   );
 }

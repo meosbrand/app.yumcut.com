@@ -78,7 +78,18 @@ server since it needs a real headless browser.
 | `set_provider_credential` | Store/replace a provider API key |
 | `delete_provider_credential` | Remove a stored provider credential |
 | `validate_stick_scene_script` | Check a stick-figure scene script against its schema, cheaply, without rendering |
-| `render_stick_figure_video` | Render a validated scene script to mp4 via the procedural renderer (see docs/stick-renderer.md) |
+| `start_stick_render_job` | Enqueue (or, with `wait: true`, block for) a stick-figure render (see docs/stick-renderer.md) |
+| `get_render_job` | Poll a render job by id (`queued` / `running` / `done` / `error`) |
+| `list_render_jobs` | List recent render jobs on this MCP server instance |
+
+Rendering is async by design, the same pattern [HyperFrames](https://hyperframes.heygen.com/guides/mcp)
+(HeyGen's self-hosted rendering MCP server) uses for the identical problem: a headless-browser
+render takes tens of seconds to minutes and must not hold an MCP call open. `start_stick_render_job`
+enqueues a job (persisted under `scripts/stick-renderer/out/jobs/` as JSON, so it survives an MCP
+server restart -- though an in-flight render does not resume) and returns a `jobId` immediately;
+poll it with `get_render_job`, or pass `wait: true` for short clips to block and get the result in
+one call. Concurrency is capped by `STICK_RENDER_CONCURRENCY` (default 1 -- headless-Chromium
+renders are heavy).
 
 ### Not yet wired up
 
@@ -149,10 +160,61 @@ mcp_servers:
         - create_project
         - list_templates
         - validate_stick_scene_script
-        - render_stick_figure_video
+        - start_stick_render_job
+        - get_render_job
+        - list_render_jobs
 ```
 
 The `tools.include` allowlist is optional but recommended -- Hermes's own docs call this the
 "smallest useful surface" pattern, and it keeps credential-management tools out of an agent's reach
 unless you deliberately add them back. Verify the connection with `hermes mcp test yumcut` before
 starting a session.
+
+## 6. Self-hosted HTTP transport
+
+Everything above uses stdio: the agent harness spawns `npm run mcp:server` itself as a local
+subprocess. To instead run the MCP server as a standalone, self-hosted service that other
+machines/processes connect to over the network (again mirroring HyperFrames' dual-transport
+design), set `MCP_TRANSPORT=http`:
+
+```
+MCP_TRANSPORT=http \
+MCP_HTTP_PORT=8787 \
+MCP_HTTP_ACCESS_TOKEN="<random secret>" \
+YUMCUT_API_BASE_URL="http://localhost:3000" \
+YUMCUT_API_TOKEN="yc_live_..." \
+npm run mcp:server
+```
+
+This serves:
+
+- `POST /mcp` -- the MCP Streamable HTTP transport (stateless: each request gets a fresh server
+  instance, since there's no per-connection state to keep). Connect with any MCP HTTP client, e.g.
+  the SDK's `StreamableHTTPClientTransport`.
+- `GET /files/<name>` -- downloads a finished render (`outPath`'s basename from `get_render_job`),
+  since an HTTP-connected client has no access to this process's local filesystem the way a stdio
+  subprocess's parent does.
+- `GET /health` -- unauthenticated liveness check.
+
+`MCP_HTTP_ACCESS_TOKEN`, when set, is required as `Authorization: Bearer <token>` on every request
+except `/health`; **without it, anything that can reach the port can call the server.** The default
+host (`MCP_HTTP_HOST`, default `127.0.0.1`) only accepts local connections, so it's safe to leave
+the token unset for local-only testing -- set one before binding to `0.0.0.0` or any other host.
+
+## Local MVP quick start (no database, no full app required)
+
+The render tools (`validate_stick_scene_script`, `start_stick_render_job`, `get_render_job`,
+`list_render_jobs`) don't touch the YumCut REST API or database at all, so you can try the whole
+render pipeline locally today without running Next.js, MySQL, or generating a personal access
+token:
+
+```
+MCP_TRANSPORT=http MCP_HTTP_PORT=8787 npm run mcp:server
+```
+
+Then, from another terminal, drive it with any MCP HTTP client -- or just watch
+`tests/stick-renderer/http-server.e2e.spec.ts` do exactly this against a real server on an
+ephemeral port (`npx vitest run tests/stick-renderer/http-server.e2e.spec.ts`) as a working
+reference. The project/credential tools (`list_projects`, `create_project`,
+`set_provider_credential`, etc.) do need a running YumCut app + database behind
+`YUMCUT_API_BASE_URL`, per steps 1-4 above.

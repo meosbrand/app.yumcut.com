@@ -53,7 +53,7 @@ npm run stick:render -- --scene path/to/scene.json --out out.mp4
 npm run stick:studio   # interactive Remotion Studio preview
 ```
 
-Both the CLI and the `render_stick_figure_video` MCP tool (see docs/mcp.md) share the same
+Both the CLI and the `start_stick_render_job` MCP tool (see docs/mcp.md) share the same
 implementation, `scripts/stick-renderer/render-lib.ts`, which bundles `remotion/index.ts` and
 renders via `@remotion/renderer`. It points at the pre-installed Playwright Chromium headless shell
 by default (`REMOTION_BROWSER_EXECUTABLE` env var to override) rather than letting Remotion
@@ -61,22 +61,25 @@ download its own browser.
 
 ## Driving it from an agent
 
-An MCP-connected agent (Claude Code, Codex, Hermes Agent -- see docs/mcp.md) can call
-`validate_stick_scene_script` to check a script cheaply, then `render_stick_figure_video` to render
-it, without ever touching this repo's CLI directly. Renders longer than 600s total are rejected by
-the tool; split a long video into several scene scripts instead.
+An MCP-connected agent (Claude Code, Codex, Hermes Agent, or any HTTP MCP client against the
+self-hosted transport -- see docs/mcp.md) can call `validate_stick_scene_script` to check a script
+cheaply, then `start_stick_render_job` (polling `get_render_job`, or `wait: true` for short clips)
+to render it, without ever touching this repo's CLI directly. Renders longer than 600s total are
+rejected up front; split a long video into several scene scripts instead.
 
 ## Tests
 
 - `tests/shared/stick-scenes/schema.test.ts`, `rig.test.ts` -- pure logic (schema validation, pose
   math, forward kinematics), run as part of the normal fast suite.
-- `tests/mcp/tools.test.ts` -- exercises the MCP tool surface in-process (validation logic, the
-  render-duration guard), also in the normal fast suite.
-- `tests/stick-renderer/render.e2e.spec.ts` and `mcp-render-tool.e2e.spec.ts` -- real bundle +
-  headless-Chromium renders, one through render-lib directly and one through the actual MCP tool
-  call, proving the whole pipeline (CLI and agent-facing alike) produces a valid mp4. Both need a
-  real browser, so they're excluded from `test:fast`/pre-commit; run them directly with
-  `npx vitest run tests/stick-renderer`.
+- `tests/mcp/tools.test.ts`, `render-jobs.test.ts` -- exercise the MCP tool surface and the job
+  queue in-process with a fake runner (validation logic, the render-duration guard, concurrency
+  limiting, persistence), also in the normal fast suite -- no real render, no browser.
+- `tests/stick-renderer/render.e2e.spec.ts`, `mcp-render-tool.e2e.spec.ts`, and
+  `http-server.e2e.spec.ts` -- real bundle + headless-Chromium renders, through render-lib
+  directly, through the MCP tool call (stdio-style in-process transport), and through the
+  self-hosted HTTP transport over a real socket, respectively -- proving the whole pipeline works
+  however it's driven. All three need a real browser, so they're excluded from
+  `test:fast`/pre-commit; run them directly with `npx vitest run tests/stick-renderer`.
 
 ## Not yet wired up
 
