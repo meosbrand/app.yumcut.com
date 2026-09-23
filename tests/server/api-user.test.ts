@@ -1,13 +1,20 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { authenticateApiRequest } from '@/server/api-user';
+import { generateApiToken, hashApiToken } from '@/server/auth/api-tokens';
 
 const findUniqueUser = vi.hoisted(() => vi.fn());
+const findUniqueApiToken = vi.hoisted(() => vi.fn());
+const updateApiToken = vi.hoisted(() => vi.fn());
 
 vi.mock('@/server/db', () => ({
   prisma: {
     user: {
       findUnique: findUniqueUser,
+    },
+    apiToken: {
+      findUnique: findUniqueApiToken,
+      update: updateApiToken,
     },
   },
 }));
@@ -31,6 +38,51 @@ describe('authenticateApiRequest', () => {
     vi.resetAllMocks();
     findUniqueUser.mockReset();
     findUniqueUser.mockResolvedValue({ id: 'session-user', deleted: false });
+    findUniqueApiToken.mockReset();
+    updateApiToken.mockReset();
+    updateApiToken.mockResolvedValue(undefined);
+  });
+
+  it('returns api-token context when bearer is a valid personal access token', async () => {
+    const generated = generateApiToken();
+    findUniqueApiToken.mockResolvedValue({
+      id: 'token-1',
+      userId: 'user-agent',
+      revokedAt: null,
+      user: { deleted: false, isAdmin: false, email: 'agent@example.com', name: 'Agent' },
+    });
+    const req = new NextRequest('http://localhost/api/projects', {
+      headers: new Headers({ authorization: `Bearer ${generated.token}` }),
+    });
+
+    const result = await authenticateApiRequest(req);
+
+    expect(result).toEqual({
+      userId: 'user-agent',
+      sessionUser: { id: 'user-agent', email: 'agent@example.com', name: 'Agent', isAdmin: false },
+      source: 'api-token',
+    });
+    expect(findUniqueApiToken).toHaveBeenCalledWith({
+      where: { tokenHash: hashApiToken(generated.token) },
+      select: expect.anything(),
+    });
+    expect(mockedVerifyMobile).not.toHaveBeenCalled();
+    expect(mockedSession).not.toHaveBeenCalled();
+  });
+
+  it('rejects a revoked personal access token', async () => {
+    const generated = generateApiToken();
+    findUniqueApiToken.mockResolvedValue({
+      id: 'token-1',
+      userId: 'user-agent',
+      revokedAt: new Date(),
+      user: { deleted: false, isAdmin: false, email: null, name: null },
+    });
+    const req = new NextRequest('http://localhost/api/projects', {
+      headers: new Headers({ authorization: `Bearer ${generated.token}` }),
+    });
+
+    await expect(authenticateApiRequest(req)).resolves.toBeNull();
   });
 
   it('returns mobile context when bearer token is valid', async () => {

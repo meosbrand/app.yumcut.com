@@ -1,0 +1,75 @@
+{
+  "fps": 30,
+  "aspect": "horizontal-16-9",
+  "characterDefs": [
+    { "id": "narrator", "label": "Nova", "color": "#1a1a1a" }
+  ],
+  "scenes": [
+    {
+      "id": "intro",
+      "durationSeconds": 3,
+      "background": "whiteboard",
+      "characters": [
+        { "characterId": "narrator", "pose": "wave", "position": { "x": 0.5, "y": 0.72 } }
+      ],
+      "props": [
+        { "id": "idea-icon", "kind": "icon", "iconKey": "lightbulb", "position": { "x": 0.5, "y": 0.28 }, "scale": 1.4 }
+      ],
+      "captionText": "Got an idea? Let's turn it into a video."
+    },
+    {
+      "id": "explain",
+      "durationSeconds": 4,
+      "background": "whiteboard",
+      "characters": [
+        { "characterId": "narrator", "pose": "explain", "position": { "x": 0.3, "y": 0.72 } }
+      ],
+      "props": [
+        { "id": "script-icon", "kind": "icon", "iconKey": "chat-bubble", "position": { "x": 0.68, "y": 0.32 }, "scale": 1.2 },
+        { "id": "explain-arrow", "kind": "arrow", "from": { "x": 0.42, "y": 0.4 }, "to": { "x": 0.58, "y": 0.35 } }
+      ],
+      "camera": {
+        "from": { "x": 0.5, "y": 0.5 }, "to": { "x": 0.5, "y": 0.48 },
+        "fromZoom": 1, "toZoom": 1.06
+      },
+      "captionText": "An agent writes the script and plans every scene."
+    },
+    {
+      "id": "walk",
+      "durationSeconds": 3,
+      "background": "grid",
+      "characters": [
+        { "characterId": "narrator", "pose": "walk", "position": { "x": 0.35, "y": 0.75 }, "facing": "right" }
+      ],
+      "props": [
+        { "id": "gear-icon", "kind": "icon", "iconKey": "gear", "position": { "x": 0.72, "y": 0.3 }, "scale": 1.3 }
+      ],
+      "captionText": "No GPU, no diffusion model -- just code drawing figures."
+    },
+    {
+      "id": "point",
+      "durationSeconds": 3,
+      "background": "whiteboard",
+      "characters": [
+        { "characterId": "narrator", "pose": "point-right", "position": { "x": 0.32, "y": 0.72 } }
+      ],
+      "props": [
+        { "id": "check-icon", "kind": "icon", "iconKey": "checkmark", "position": { "x": 0.7, "y": 0.35 }, "scale": 1.3 },
+        { "id": "point-arrow", "kind": "arrow", "from": { "x": 0.45, "y": 0.5 }, "to": { "x": 0.62, "y": 0.4 } }
+      ],
+      "captionText": "Same rig, every time -- fully consistent output."
+    },
+    {
+      "id": "outro",
+      "durationSeconds": 2.5,
+      "background": "whiteboard",
+      "characters": [
+        { "characterId": "narrator", "pose": "celebrate", "position": { "x": 0.5, "y": 0.72 } }
+      ],
+      "props": [
+        { "id": "star-icon", "kind": "icon", "iconKey": "star", "position": { "x": 0.5, "y": 0.28 }, "scale": 1.5 }
+      ],
+      "captionText": "That's a finished stick-figure explainer."
+    }
+  ]
+}
