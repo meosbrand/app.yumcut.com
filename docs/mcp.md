@@ -59,8 +59,45 @@ YUMCUT_API_TOKEN="yc_live_..." \
 npm run mcp:server
 ```
 
-This starts a stdio MCP server (`scripts/mcp/index.ts`). Point an MCP-compatible client at it, e.g.
-in Claude Desktop / Claude Code config:
+This starts a stdio MCP server (`scripts/mcp/index.ts`) that any MCP-compatible agent harness can
+connect to. It's a thin HTTP client (`scripts/mcp/client.ts`) over the existing REST API for the
+project/credential tools — no direct database access, so an agent can never do more than the
+authenticated user could already do through the UI — plus a local wrapper around the stick-figure
+renderer (`scripts/stick-renderer/render-lib.ts`), which runs on whatever machine hosts this MCP
+server since it needs a real headless browser.
+
+### Tools exposed today
+
+| Tool | Purpose |
+| --- | --- |
+| `list_projects` | List the user's projects with status |
+| `get_project` | Full project detail (scripts, audio, video, status history) |
+| `create_project` | Start a new project from a prompt or exact script |
+| `list_templates` | List available art-style/voice/music templates |
+| `list_provider_credentials` | List the user's BYOK credentials (masked) |
+| `set_provider_credential` | Store/replace a provider API key |
+| `delete_provider_credential` | Remove a stored provider credential |
+| `validate_stick_scene_script` | Check a stick-figure scene script against its schema, cheaply, without rendering |
+| `render_stick_figure_video` | Render a validated scene script to mp4 via the procedural renderer (see docs/stick-renderer.md) |
+
+### Not yet wired up
+
+Publishing/scheduling tools (`schedule_publish_task`, `list_publish_channels`), a trend-research
+tool backed by the YouTube Data/Analytics APIs, and the nightly "learning loop" that updates a
+prompt/playbook library are follow-up work, not part of this pass. There's also no tool yet that
+turns a topic or approved script into a stick-figure scene script -- that's currently the calling
+agent's job, using `validate_stick_scene_script` to iterate.
+
+## 5. Connecting an agent harness
+
+Any MCP-native coding agent can drive this server the same way; only the config file differs. All
+three below launch the identical command (`npm run mcp:server` in this repo, with a personal
+access token), so the tool surface and everything it can/can't do is the same regardless of which
+one is doing the driving.
+
+### Claude Code
+
+Project-scoped `.mcp.json` at the repo root (or `claude mcp add yumcut -- npm run mcp:server`):
 
 ```json
 {
@@ -78,24 +115,44 @@ in Claude Desktop / Claude Code config:
 }
 ```
 
-### Tools exposed today
+### OpenAI Codex CLI
 
-| Tool | Purpose |
-| --- | --- |
-| `list_projects` | List the user's projects with status |
-| `get_project` | Full project detail (scripts, audio, video, status history) |
-| `create_project` | Start a new project from a prompt or exact script |
-| `list_templates` | List available art-style/voice/music templates |
-| `list_provider_credentials` | List the user's BYOK credentials (masked) |
-| `set_provider_credential` | Store/replace a provider API key |
-| `delete_provider_credential` | Remove a stored provider credential |
+`~/.codex/config.toml` (or a trusted project-scoped `.codex/config.toml`):
 
-The MCP server is intentionally a thin HTTP client (`scripts/mcp/client.ts`) over the existing REST
-API — it has no direct database access, so an agent can never do more than the authenticated user
-could already do through the UI.
+```toml
+[mcp_servers.yumcut]
+command = "npm"
+args = ["run", "mcp:server"]
+env = { YUMCUT_API_BASE_URL = "http://localhost:3000", YUMCUT_API_TOKEN = "yc_live_..." }
+```
 
-### Not yet wired up
+`args`/`command` run relative to Codex's working directory, so either `cd` into the repo before
+launching Codex there, or point `command` at an absolute path (e.g. `npm --prefix /path/to/app.yumcut.com`).
 
-Publishing/scheduling tools (`schedule_publish_task`, `list_publish_channels`), a trend-research
-tool backed by the YouTube Data/Analytics APIs, and the nightly "learning loop" that updates a
-prompt/playbook library are follow-up work, not part of this pass.
+### Hermes Agent (Nous Research)
+
+Hermes Agent is MCP-native and MCP-first: it has no fixed built-in tool catalog, so the servers you
+configure *are* its tools. Add to `~/.hermes/config.yaml`:
+
+```yaml
+mcp_servers:
+  yumcut:
+    command: "npm"
+    args: ["run", "mcp:server"]
+    env:
+      YUMCUT_API_BASE_URL: "http://localhost:3000"
+      YUMCUT_API_TOKEN: "yc_live_..."
+    tools:
+      include:
+        - list_projects
+        - get_project
+        - create_project
+        - list_templates
+        - validate_stick_scene_script
+        - render_stick_figure_video
+```
+
+The `tools.include` allowlist is optional but recommended -- Hermes's own docs call this the
+"smallest useful surface" pattern, and it keeps credential-management tools out of an agent's reach
+unless you deliberately add them back. Verify the connection with `hermes mcp test yumcut` before
+starting a session.

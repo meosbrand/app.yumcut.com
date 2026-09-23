@@ -1,20 +1,19 @@
-import { describe, expect, it, beforeAll, afterAll } from 'vitest';
+import { describe, expect, it, afterAll } from 'vitest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { bundle } from '@remotion/bundler';
-import { renderMedia, selectComposition } from '@remotion/renderer';
 import { sceneScriptSchema } from '@/shared/stick-scenes/schema';
+import { renderStickFigureScript, DEFAULT_BROWSER_EXECUTABLE } from '../../scripts/stick-renderer/render-lib';
 
 /// Genuine end-to-end smoke test: bundles the real `remotion/` composition
-/// and renders an actual mp4 through headless Chromium, proving the whole
-/// stick-figure pipeline works, not just the pure pose/schema math (see
-/// tests/shared/stick-scenes for that). Needs a real browser, so it's
-/// excluded from `test:fast` / the pre-commit hook, same as tests/daemon.
+/// and renders an actual mp4 through headless Chromium via the same
+/// render-lib the CLI and the `render_stick_figure_video` MCP tool both
+/// call, proving the whole stick-figure pipeline works end to end (see
+/// tests/shared/stick-scenes for the pure pose/schema math). Needs a real
+/// browser, so it's excluded from `test:fast` / the pre-commit hook, same
+/// as tests/daemon.
 
-const browserExecutable =
-  process.env.REMOTION_BROWSER_EXECUTABLE || '/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell';
-const hasBrowser = fs.existsSync(browserExecutable);
+const hasBrowser = fs.existsSync(DEFAULT_BROWSER_EXECUTABLE);
 
 const tinyScript = sceneScriptSchema.parse({
   fps: 15,
@@ -32,46 +31,21 @@ const tinyScript = sceneScriptSchema.parse({
 });
 
 describe.skipIf(!hasBrowser)('stick-figure renderer (e2e)', () => {
-  let serveUrl: string;
   let outDir: string;
 
-  beforeAll(async () => {
-    outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'stick-renderer-e2e-'));
-    serveUrl = await bundle({
-      entryPoint: path.resolve('remotion/index.ts'),
-      webpackOverride: (config) => ({
-        ...config,
-        resolve: { ...config.resolve, alias: { ...(config.resolve?.alias ?? {}), '@': path.resolve('src') } },
-      }),
-    });
-  }, 120_000);
-
   afterAll(() => {
-    fs.rmSync(outDir, { recursive: true, force: true });
+    if (outDir) fs.rmSync(outDir, { recursive: true, force: true });
   });
 
-  it('bundles, selects the composition, and renders a valid mp4', async () => {
-    const composition = await selectComposition({
-      serveUrl,
-      id: 'StickFigureScenes',
-      inputProps: { script: tinyScript },
-      browserExecutable,
-    });
-    expect(composition.durationInFrames).toBe(15);
-    expect(composition.fps).toBe(15);
+  it('bundles, renders, and writes a valid mp4', async () => {
+    outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'stick-renderer-e2e-'));
+    const outPath = path.join(outDir, 'smoke.mp4');
 
-    const outputLocation = path.join(outDir, 'smoke.mp4');
-    await renderMedia({
-      composition,
-      serveUrl,
-      codec: 'h264',
-      outputLocation,
-      inputProps: { script: tinyScript },
-      browserExecutable,
-      chromiumOptions: { headless: true },
-    });
+    const result = await renderStickFigureScript({ script: tinyScript, outPath });
 
-    const stats = fs.statSync(outputLocation);
+    expect(result.durationInFrames).toBe(15);
+    expect(result.fps).toBe(15);
+    const stats = fs.statSync(outPath);
     expect(stats.size).toBeGreaterThan(1000);
   }, 120_000);
 });

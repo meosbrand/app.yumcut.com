@@ -1,6 +1,13 @@
 import { z } from 'zod';
+import path from 'path';
+import { randomUUID } from 'crypto';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { yumcutFetch, YumCutApiError } from './client';
+import { sceneScriptSchema, totalDurationSeconds } from '@/shared/stick-scenes/schema';
+import { renderStickFigureScript } from '../stick-renderer/render-lib';
+
+const MAX_RENDER_DURATION_SECONDS = 600;
+const RENDER_OUTPUT_DIR = path.resolve('scripts/stick-renderer/out/mcp');
 
 function textResult(value: unknown) {
   return { content: [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }] };
@@ -140,5 +147,63 @@ export function registerYumCutTools(server: McpServer) {
       annotations: { title: 'Delete provider credential', destructiveHint: true },
     },
     async ({ credentialId }) => runTool(() => yumcutFetch(`/api/settings/credentials/${credentialId}`, { method: 'DELETE' })),
+  );
+
+  server.registerTool(
+    'validate_stick_scene_script',
+    {
+      title: 'Validate a stick-figure scene script',
+      description:
+        'Check a stick-figure scene script (the JSON contract in src/shared/stick-scenes/schema.ts: characterDefs, ' +
+        'scenes with poses/props/camera/captions) against its schema without rendering. Use this to iterate on a ' +
+        'script cheaply before calling render_stick_figure_video, which bundles and renders through a real browser.',
+      inputSchema: {
+        script: z.unknown().describe('The candidate scene script JSON'),
+      },
+    },
+    async ({ script }) => {
+      const result = sceneScriptSchema.safeParse(script);
+      if (!result.success) {
+        return textResult({ valid: false, errors: result.error.issues });
+      }
+      return textResult({
+        valid: true,
+        sceneCount: result.data.scenes.length,
+        totalDurationSeconds: totalDurationSeconds(result.data),
+      });
+    },
+  );
+
+  server.registerTool(
+    'render_stick_figure_video',
+    {
+      title: 'Render a stick-figure scene script to mp4',
+      description:
+        'Renders a validated stick-figure scene script to an mp4 using the procedural (no GPU, no diffusion model) ' +
+        'renderer in remotion/. This runs a real headless-browser render on the machine hosting this MCP server and ' +
+        `can take tens of seconds; scripts longer than ${MAX_RENDER_DURATION_SECONDS}s total are rejected -- split ` +
+        'a long video into several renders instead. Returns the absolute output path plus frame/fps/resolution info.',
+      inputSchema: {
+        script: sceneScriptSchema,
+        outputFileName: z
+          .string()
+          .max(128)
+          .optional()
+          .describe('Optional .mp4 filename (basename only, no path separators); a unique name is generated if omitted'),
+      },
+      annotations: { title: 'Render stick-figure video', destructiveHint: false },
+    },
+    async ({ script, outputFileName }) => runTool(async () => {
+      const duration = totalDurationSeconds(script);
+      if (duration > MAX_RENDER_DURATION_SECONDS) {
+        throw new Error(
+          `Script totals ${duration}s, over the ${MAX_RENDER_DURATION_SECONDS}s render limit. Split it into shorter scripts.`,
+        );
+      }
+      const safeName = (outputFileName ? path.basename(outputFileName) : `${randomUUID()}.mp4`).replace(/[^a-zA-Z0-9._-]/g, '_');
+      const outPath = path.join(RENDER_OUTPUT_DIR, safeName.endsWith('.mp4') ? safeName : `${safeName}.mp4`);
+      const result = await renderStickFigureScript({ script, outPath });
+      return result;
+    }),
   );
 }
