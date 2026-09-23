@@ -154,7 +154,7 @@ export function registerYumCutTools(server: McpServer) {
       description:
         'Check a stick-figure scene script (the JSON contract in src/shared/stick-scenes/schema.ts: characterDefs, ' +
         'scenes with poses/props/camera/captions) against its schema without rendering. Use this to iterate on a ' +
-        'script cheaply before calling render_stick_figure_video, which bundles and renders through a real browser.',
+        'script cheaply before calling start_stick_render_job, which bundles and renders through a real browser.',
       inputSchema: {
         script: z.unknown().describe('The candidate scene script JSON'),
       },

@@ -156,16 +156,14 @@ The app can send Telegram alerts when a project needs manual approval, encounter
 
 Once configured, each user can open **Account → Telegram notifications** to generate a one-time connection code and link their Telegram chat. They can disconnect from the same panel or by sending `/stop` to the bot. The backend stores only the chat identifier and basic profile metadata; connection codes expire after 10 minutes.
 
-## Driving YumCut from an AI agent (MCP + BYOK)
+## Driving YumCut from an AI agent (MCP + BYOK) and the stick-figure renderer
 
-See [docs/mcp.md](mcp.md) for personal access tokens, per-user BYOK provider credentials, and the
-`scripts/mcp` MCP server that exposes project creation/status as agent tools.
-
-## Procedural stick-figure renderer
-
-See [docs/stick-renderer.md](stick-renderer.md) for the code-driven (no GPU, no diffusion model)
-stick-figure video renderer: a structured scene-script schema, a pure forward-kinematics rig, and
-a Remotion composition that renders it to mp4.
+Start at [scripts/mcp/README.md](../scripts/mcp/README.md) -- the single, self-contained reference
+for personal access tokens, per-user BYOK provider credentials, the MCP server (stdio and
+self-hosted HTTP transports, all tools, per-harness setup for Claude Code/Codex/Hermes Agent), the
+async render job queue, and the code-driven (no GPU, no diffusion model) stick-figure renderer.
+[docs/mcp.md](mcp.md) and [docs/stick-renderer.md](stick-renderer.md) cover the same ground with
+more surrounding app context if you want it.
 
 ## Planning Documents
 
