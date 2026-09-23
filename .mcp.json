@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "yumcut": {
+      "command": "npm",
+      "args": ["run", "mcp:server"]
+    }
+  }
+}
